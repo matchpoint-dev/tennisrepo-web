@@ -158,7 +158,7 @@ export default async function Home() {
       {/* Main Content */}
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px', display: 'grid', gridTemplateColumns: '1fr 320px', gap: 32 }}>
 
-        {/* Left — Recent Tournaments + Explore */}
+        {/* Left — Recent Tournaments */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#f0c619', textTransform: 'uppercase', letterSpacing: 1 }}>Recent Tournaments</h3>
@@ -221,25 +221,6 @@ export default async function Home() {
             })}
           </div>
 
-          {/* Explore */}
-          <h3 style={{ fontSize: 16, fontWeight: 700, margin: '32px 0 16px', color: '#f0c619', textTransform: 'uppercase', letterSpacing: 1 }}>Explore</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-            {[
-              { label: 'Player Profiles', icon: '👤', href: '/players' },
-              { label: 'Head to Head', icon: '⚔️', href: '/h2h' },
-              { label: 'Rankings', icon: '📊', href: '/rankings' },
-              { label: 'Surface Stats', icon: '🎾', href: '/players' },
-              { label: 'Entry Lists', icon: '📋', href: '/tournaments' },
-              { label: 'Tournament History', icon: '🏆', href: '/tournaments' },
-            ].map(item => (
-              <Link key={item.label} href={item.href} style={{ textDecoration: 'none' }}>
-                <div style={{ backgroundColor: '#0d1f3c', borderRadius: 10, padding: 16, border: '1px solid #1e3a5f', textAlign: 'center' }}>
-                  <div style={{ fontSize: 24, marginBottom: 6 }}>{item.icon}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'white' }}>{item.label}</div>
-                </div>
-              </Link>
-            ))}
-          </div>
         </div>
 
         {/* Right sidebar — ATP Rankings + ELO Rankings */}

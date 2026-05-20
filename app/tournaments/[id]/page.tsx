@@ -6,6 +6,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabase';
 import { getFlagUrl } from '../../lib/countryUtils';
 import NavBar from '../../NavBar';
+import ATPFinalsView from './ATPFinalsView';
+import LaverCupView from './LaverCupView';
+import TeamEventView, { TeamChampionBanner } from './TeamEventView';
+
 const LEVEL_LABELS: Record<string, string> = {
   G: 'Grand Slam', M: 'Masters 1000', F: 'ATP Finals',
   '500': 'ATP 500', '250': 'ATP 250', A: 'ATP 250',
@@ -181,9 +185,17 @@ export default function TournamentDetailPage() {
         const allEditions = Array.from(seenYears.values())
           .sort((a, b) => b._displayYear - a._displayYear);
 
+        // Ghost tournament fix: if the current ID has no matches but we know the
+        // real match-bearing ID for this year (from finals data), redirect silently.
+        const currentDisplayYear = displayYear(t.year, t.start_date);
+        const realId = realIdByYear[currentDisplayYear];
+        if (realId && String(realId) !== String(id)) {
+          router.replace(`/tournaments/${realId}`);
+          return;
+        }
+
         // Other editions: filter by display year so Dec 26+ editions are never
         // mistakenly treated as the same year as the current page.
-        const currentDisplayYear = displayYear(t.year, t.start_date);
         const others = allEditions
           .filter((e: any) => e._displayYear !== currentDisplayYear)
           .map((e: any) => ({
@@ -238,6 +250,154 @@ export default function TournamentDetailPage() {
   const levelColor = tournament ? getTournamentColor(tournament.name, tournament.level) : '#94a3b8';
   const levelLabel = tournament ? getTournamentLabel(tournament.name, tournament.level) : '';
 
+  // Tournament type flags
+  const isATPFinals = tournament != null && tournament.level === 'F';
+  const isLaverCup  = tournament != null && tournament.level === 'D' && tournament.name != null && tournament.name.toLowerCase().includes('laver');
+  const isTeamEvent = tournament != null && tournament.level === 'D' && !isLaverCup;
+
+  // Pre-render champion banner and draw section to keep JSX clean
+  const championBannerNode = isTeamEvent ? (
+    <TeamChampionBanner match={finalMatch} tournament={tournament} />
+  ) : (!isLaverCup && champion) ? (
+    <div style={{
+      background: 'linear-gradient(135deg, #1a1200 0%, #2a1f00 50%, #0d1f3c 100%)',
+      border: '1px solid #f0c61940',
+      borderRadius: '14px',
+      padding: '1.5rem 2rem',
+      marginBottom: '1.25rem',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '2rem',
+      flexWrap: 'wrap' as const,
+    }}>
+      <div style={{ fontSize: '2.5rem' }}>🏆</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#f0c619', textTransform: 'uppercase' as const, letterSpacing: '0.15em', marginBottom: '0.3rem' }}>
+          Winner
+        </div>
+        <Link href={`/players/${champion.id}`} style={{ textDecoration: 'none' }}>
+          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f0c619', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {getFlagUrl(champion.country_code) && <img src={getFlagUrl(champion.country_code)!} alt={champion.country_code} style={{ height: 20, borderRadius: 2 }} />}
+            {champion.full_name}
+          </div>
+        </Link>
+        {finalScore && (
+          <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.3rem' }}>
+            {'def. '}
+            <Link href={`/players/${finalist?.id}`} style={{ color: '#94a3b8', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+              {getFlagUrl(finalist?.country_code) && <img src={getFlagUrl(finalist?.country_code)!} alt={finalist?.country_code} style={{ height: 14, borderRadius: 1 }} />}
+              {finalist?.full_name}
+            </Link>
+            <span style={{ marginLeft: '0.6rem', fontVariantNumeric: 'tabular-nums', color: '#64748b' }}>{finalScore}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
+
+  const drawNode = isATPFinals ? (
+    <ATPFinalsView matches={matches} />
+  ) : isLaverCup ? (
+    <LaverCupView matches={matches} tournament={tournament} />
+  ) : isTeamEvent ? (
+    <TeamEventView matches={matches} />
+  ) : matches.length === 0 ? (
+    <div style={{ color: '#64748b', textAlign: 'center', padding: '3rem', backgroundColor: '#0d1f3c', borderRadius: '12px', border: '1px solid #1e3a5f' }}>
+      No match data available for this tournament.
+    </div>
+  ) : (
+    <>{rounds.map((round) => (
+      <div key={round} style={{ marginBottom: '1.25rem' }}>
+        <div style={{
+          fontSize: '0.78rem', fontWeight: 700, color: '#94a3b8',
+          textTransform: 'uppercase' as const, letterSpacing: '0.12em',
+          marginBottom: '0.5rem',
+          display: 'flex', alignItems: 'center', gap: '0.5rem',
+        }}>
+          <span style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: round === 'F' ? '#f0c619' : surfColor, display: 'inline-block' }} />
+          {ROUND_LABELS[round] ?? round}
+          <span style={{ color: '#334155', fontWeight: 400 }}>({byRound[round].length})</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+          {byRound[round].map((m: any) => (
+            <div key={m.id}
+              onClick={() => router.push(`/matches/${m.id}`)}
+              style={{
+                backgroundColor: round === 'F' ? '#1a1600' : '#0d1f3c',
+                border: `1px solid ${round === 'F' ? '#f0c61930' : '#1e3a5f'}`,
+                borderRadius: '8px',
+                padding: '0.65rem 1.25rem',
+                display: 'grid',
+                gridTemplateColumns: '1fr auto 1fr',
+                alignItems: 'center',
+                gap: '1rem',
+                cursor: 'pointer',
+                transition: 'border-color 0.15s, background-color 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = round === 'F' ? '#f0c61970' : '#2e4f7a';
+                e.currentTarget.style.backgroundColor = round === 'F' ? '#1f1a00' : '#112040';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = round === 'F' ? '#f0c61930' : '#1e3a5f';
+                e.currentTarget.style.backgroundColor = round === 'F' ? '#1a1600' : '#0d1f3c';
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0 }}>
+                {m.winner_seed && (
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
+                    {m.winner_seed}
+                  </span>
+                )}
+                {!m.winner_seed && m.winner_entry && (
+                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', background: '#0a1628', border: '1px solid #334155', borderRadius: 4, padding: '1px 4px', flexShrink: 0 }}>
+                    {m.winner_entry}
+                  </span>
+                )}
+                <Link href={`/players/${m.winner?.id}`} onClick={e => e.stopPropagation()} style={{
+                  color: round === 'F' ? '#f0c619' : '#e2e8f0',
+                  textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem',
+                  display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0,
+                }}>
+                  {getFlagUrl(m.winner?.country_code) && <img src={getFlagUrl(m.winner?.country_code)!} alt={m.winner?.country_code} style={{ height: 13, borderRadius: 1, flexShrink: 0 }} />}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.winner?.full_name ?? '?'}</span>
+                </Link>
+                {m.winner_rank && (
+                  <span style={{ fontSize: '0.72rem', color: '#475569', flexShrink: 0 }}>#{m.winner_rank}</span>
+                )}
+              </div>
+              <span style={{ color: '#64748b', fontSize: '0.8rem', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                {m.score || 'vs'}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'flex-end', minWidth: 0 }}>
+                {m.loser_rank && (
+                  <span style={{ fontSize: '0.72rem', color: '#475569', flexShrink: 0 }}>#{m.loser_rank}</span>
+                )}
+                <Link href={`/players/${m.loser?.id}`} onClick={e => e.stopPropagation()} style={{
+                  color: '#64748b', textDecoration: 'none',
+                  fontSize: '0.9rem',
+                  display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0,
+                }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.loser?.full_name ?? '?'}</span>
+                  {getFlagUrl(m.loser?.country_code) && <img src={getFlagUrl(m.loser?.country_code)!} alt={m.loser?.country_code} style={{ height: 13, borderRadius: 1, flexShrink: 0 }} />}
+                </Link>
+                {!m.loser_seed && m.loser_entry && (
+                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', background: '#0a1628', border: '1px solid #334155', borderRadius: 4, padding: '1px 4px', flexShrink: 0 }}>
+                    {m.loser_entry}
+                  </span>
+                )}
+                {m.loser_seed && (
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
+                    {m.loser_seed}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}</>
+  );
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#0a1628', color: '#e2e8f0', fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -304,144 +464,10 @@ export default function TournamentDetailPage() {
               </div>
 
               {/* Champion Banner */}
-              {champion && (
-                <div style={{
-                  background: 'linear-gradient(135deg, #1a1200 0%, #2a1f00 50%, #0d1f3c 100%)',
-                  border: '1px solid #f0c61940',
-                  borderRadius: '14px',
-                  padding: '1.5rem 2rem',
-                  marginBottom: '1.25rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '2rem',
-                  flexWrap: 'wrap',
-                }}>
-                  <div style={{ fontSize: '2.5rem' }}>🏆</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#f0c619', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '0.3rem' }}>
-                      Winner
-                    </div>
-                    <Link href={`/players/${champion.id}`} style={{ textDecoration: 'none' }}>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f0c619', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        {getFlagUrl(champion.country_code) && <img src={getFlagUrl(champion.country_code)!} alt={champion.country_code} style={{ height: 20, borderRadius: 2 }} />}
-                        {champion.full_name}
-                      </div>
-                    </Link>
-                    {finalScore && (
-                      <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.3rem' }}>
-                        def.{' '}
-                        <Link href={`/players/${finalist?.id}`} style={{ color: '#94a3b8', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                          {getFlagUrl(finalist?.country_code) && <img src={getFlagUrl(finalist?.country_code)!} alt={finalist?.country_code} style={{ height: 14, borderRadius: 1 }} />}
-                          {finalist?.full_name}
-                        </Link>
-                        <span style={{ marginLeft: '0.6rem', fontVariantNumeric: 'tabular-nums', color: '#64748b' }}>{finalScore}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+              {championBannerNode}
 
               {/* Draw */}
-              {matches.length === 0 ? (
-                <div style={{ color: '#64748b', textAlign: 'center', padding: '3rem', backgroundColor: '#0d1f3c', borderRadius: '12px', border: '1px solid #1e3a5f' }}>
-                  No match data available for this tournament.
-                </div>
-              ) : (
-                rounds.map((round) => (
-                  <div key={round} style={{ marginBottom: '1.25rem' }}>
-                    <div style={{
-                      fontSize: '0.78rem', fontWeight: 700, color: '#94a3b8',
-                      textTransform: 'uppercase', letterSpacing: '0.12em',
-                      marginBottom: '0.5rem',
-                      display: 'flex', alignItems: 'center', gap: '0.5rem',
-                    }}>
-                      <span style={{ width: 3, height: 14, borderRadius: 2, backgroundColor: round === 'F' ? '#f0c619' : surfColor, display: 'inline-block' }} />
-                      {ROUND_LABELS[round] ?? round}
-                      <span style={{ color: '#334155', fontWeight: 400 }}>({byRound[round].length})</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                      {byRound[round].map((m: any) => (
-                        <div key={m.id}
-                          onClick={() => router.push(`/matches/${m.id}`)}
-                          style={{
-                            backgroundColor: round === 'F' ? '#1a1600' : '#0d1f3c',
-                            border: `1px solid ${round === 'F' ? '#f0c61930' : '#1e3a5f'}`,
-                            borderRadius: '8px',
-                            padding: '0.65rem 1.25rem',
-                            display: 'grid',
-                            gridTemplateColumns: '1fr auto 1fr',
-                            alignItems: 'center',
-                            gap: '1rem',
-                            cursor: 'pointer',
-                            transition: 'border-color 0.15s, background-color 0.15s',
-                          }}
-                          onMouseEnter={e => {
-                            e.currentTarget.style.borderColor = round === 'F' ? '#f0c61970' : '#2e4f7a';
-                            e.currentTarget.style.backgroundColor = round === 'F' ? '#1f1a00' : '#112040';
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.borderColor = round === 'F' ? '#f0c61930' : '#1e3a5f';
-                            e.currentTarget.style.backgroundColor = round === 'F' ? '#1a1600' : '#0d1f3c';
-                          }}
-                        >
-                          {/* Winner cell */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0 }}>
-                            {m.winner_seed && (
-                              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
-                                {m.winner_seed}
-                              </span>
-                            )}
-                            {!m.winner_seed && m.winner_entry && (
-                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', background: '#0a1628', border: '1px solid #334155', borderRadius: 4, padding: '1px 4px', flexShrink: 0 }}>
-                                {m.winner_entry}
-                              </span>
-                            )}
-                            <Link href={`/players/${m.winner?.id}`} onClick={e => e.stopPropagation()} style={{
-                              color: round === 'F' ? '#f0c619' : '#e2e8f0',
-                              textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem',
-                              display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0,
-                            }}>
-                              {getFlagUrl(m.winner?.country_code) && <img src={getFlagUrl(m.winner?.country_code)!} alt={m.winner?.country_code} style={{ height: 13, borderRadius: 1, flexShrink: 0 }} />}
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.winner?.full_name ?? '?'}</span>
-                            </Link>
-                            {m.winner_rank && (
-                              <span style={{ fontSize: '0.72rem', color: '#475569', flexShrink: 0 }}>#{m.winner_rank}</span>
-                            )}
-                          </div>
-                          {/* Score */}
-                          <span style={{ color: '#64748b', fontSize: '0.8rem', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: 'center' }}>
-                            {m.score || 'vs'}
-                          </span>
-                          {/* Loser cell */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'flex-end', minWidth: 0 }}>
-                            {m.loser_rank && (
-                              <span style={{ fontSize: '0.72rem', color: '#475569', flexShrink: 0 }}>#{m.loser_rank}</span>
-                            )}
-                            <Link href={`/players/${m.loser?.id}`} onClick={e => e.stopPropagation()} style={{
-                              color: '#64748b', textDecoration: 'none',
-                              fontSize: '0.9rem',
-                              display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0,
-                            }}>
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.loser?.full_name ?? '?'}</span>
-                              {getFlagUrl(m.loser?.country_code) && <img src={getFlagUrl(m.loser?.country_code)!} alt={m.loser?.country_code} style={{ height: 13, borderRadius: 1, flexShrink: 0 }} />}
-                            </Link>
-                            {!m.loser_seed && m.loser_entry && (
-                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', background: '#0a1628', border: '1px solid #334155', borderRadius: 4, padding: '1px 4px', flexShrink: 0 }}>
-                                {m.loser_entry}
-                              </span>
-                            )}
-                            {m.loser_seed && (
-                              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#cbd5e1', background: '#1e293b', border: '1px solid #334155', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
-                                {m.loser_seed}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
+              {drawNode}
 
             </div>
 
