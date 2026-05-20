@@ -1,5 +1,5 @@
-import NavBar from '../../../NavBar';
 'use client'
+import NavBar from '../../../NavBar';
 
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
