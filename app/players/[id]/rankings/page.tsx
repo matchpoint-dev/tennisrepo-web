@@ -94,6 +94,8 @@ export default function RankingHistoryPage() {
   const data = useMemo(() => {
     if (!rawRankings.length) return null;
 
+    const currentYear = new Date().getFullYear();
+
     // De-duplicate: keep the best (lowest) rank per date
     const byDate = new Map<string, any>();
     for (const r of rawRankings) {
@@ -103,28 +105,45 @@ export default function RankingHistoryPage() {
     const pts = Array.from(byDate.values()).sort((a, b) =>
       a.ranking_date.localeCompare(b.ranking_date));
 
-    // Career stats
-    const careerHigh = pts.reduce((b, r) => r.rank < b.rank ? r : b, pts[0]);
-    const maxRank    = pts.reduce((m, r) => Math.max(m, r.rank), 1);
-    const chartMax   = Math.min(maxRank, 1200);
+    // Career stats — count weeks by spanning intervals to handle data gaps.
+    // If a player is ranked #1 on week W and the next entry is 3 weeks later,
+    // those 3 weeks all count (the rank persists until the next update).
+    function countWeeksAtRankN(n: number): number {
+      let total = 0;
+      for (let i = 0; i < pts.length - 1; i++) {
+        if (pts[i].rank <= n) {
+          const d1 = new Date(pts[i].ranking_date).getTime();
+          const d2 = new Date(pts[i + 1].ranking_date).getTime();
+          total += Math.max(1, Math.round((d2 - d1) / (7 * 24 * 3600 * 1000)));
+        }
+      }
+      if (pts[pts.length - 1].rank <= n) total += 1;
+      return total;
+    }
 
-    const weeksNo1    = pts.filter(r => r.rank === 1).length;
-    const weeksTop5   = pts.filter(r => r.rank <= 5).length;
-    const weeksTop10  = pts.filter(r => r.rank <= 10).length;
-    const weeksTop50  = pts.filter(r => r.rank <= 50).length;
-    const weeksTop100 = pts.filter(r => r.rank <= 100).length;
+    const careerHigh  = pts.reduce((b, r) => r.rank < b.rank ? r : b, pts[0]);
+    const maxRank     = pts.reduce((m, r) => Math.max(m, r.rank), 1);
+    const chartMax    = Math.min(maxRank, 1200);
 
-    // Year-end rankings (last entry per calendar year)
+    const weeksNo1    = countWeeksAtRankN(1);
+    const weeksTop5   = countWeeksAtRankN(5);
+    const weeksTop10  = countWeeksAtRankN(10);
+    const weeksTop50  = countWeeksAtRankN(50);
+    const weeksTop100 = countWeeksAtRankN(100);
+
+    // Year-end rankings (last entry per calendar year).
+    // Current year is shown in the grid but excluded from the YE#1 count —
+    // the year hasn't ended yet so it's not a confirmed year-end finish.
     const yearEndMap = new Map<number, any>();
     for (const r of pts) {
       const yr = Number(r.ranking_date.slice(0, 4));
       yearEndMap.set(yr, r);
     }
     const yearEnds = Array.from(yearEndMap.entries())
-      .map(([year, r]) => ({ year, rank: r.rank, points: r.points }))
+      .map(([year, r]) => ({ year, rank: r.rank, points: r.points, isCurrent: year === currentYear }))
       .sort((a, b) => a.year - b.year);
 
-    const yearNo1Finishes = yearEnds.filter(ye => ye.rank === 1).length;
+    const yearNo1Finishes = yearEnds.filter(ye => ye.rank === 1 && !ye.isCurrent).length;
     const peakPoints = pts.reduce((m, r) => Math.max(m, r.points ?? 0), 0);
 
     // ── Chart coordinates ──────────────────────────────────────────────────────
@@ -516,7 +535,7 @@ export default function RankingHistoryPage() {
                       padding: '14px 16px',
                       borderRight: '1px solid #1e3a5f',
                       borderBottom: '1px solid #1e3a5f',
-                      backgroundColor: isHov ? '#112240' : isNo1 ? '#0f1a00' : (i % 2 === 0 ? '#0d1f3c' : '#0a1628'),
+                      backgroundColor: isHov ? '#112240' : (isNo1 && !ye.isCurrent) ? '#0f1a00' : (i % 2 === 0 ? '#0d1f3c' : '#0a1628'),
                       transition: 'background-color 0.1s',
                       cursor: 'default',
                     }}>
@@ -528,7 +547,8 @@ export default function RankingHistoryPage() {
                       display: 'flex', alignItems: 'baseline', gap: 6,
                     }}>
                       <span>#{ye.rank}</span>
-                      {isNo1 && <span style={{ fontSize: '0.65rem', color: '#f0c619', fontWeight: 700, letterSpacing: '0.06em' }}>YE#1</span>}
+                      {isNo1 && !ye.isCurrent && <span style={{ fontSize: '0.65rem', color: '#f0c619', fontWeight: 700, letterSpacing: '0.06em' }}>YE#1</span>}
+                      {ye.isCurrent && <span style={{ fontSize: '0.6rem', color: '#475569', fontWeight: 600, letterSpacing: '0.04em' }}>ongoing</span>}
                     </div>
                     {ye.points > 0 && (
                       <div style={{ fontSize: '0.68rem', color: '#334155', marginTop: 4, fontFamily: 'monospace' }}>
