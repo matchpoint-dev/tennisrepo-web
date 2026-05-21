@@ -59,12 +59,14 @@ export default function RankingCard({
   rows,
   valueKey,
   accentColor,
+  showViewAll = true,
 }: {
   title: string;
   href: string;
   rows: any[];
   valueKey: 'points' | 'rating';
   accentColor: string;
+  showViewAll?: boolean;
 }) {
   return (
     <div style={{ marginBottom: 24 }}>
@@ -75,11 +77,13 @@ export default function RankingCard({
         {rows.map((r, i) => (
           <RankingRow key={r.playerId} r={r} i={i} total={rows.length} valueKey={valueKey} accentColor={accentColor} />
         ))}
-        <Link href={href} style={{ textDecoration: 'none' }}>
-          <div style={{ padding: '10px 14px', textAlign: 'center', fontSize: 12, color: '#64748b', fontWeight: 600, borderTop: '1px solid #0f2744' }}>
-            View all →
-          </div>
-        </Link>
+        {showViewAll && (
+          <Link href={href} style={{ textDecoration: 'none' }}>
+            <div style={{ padding: '10px 14px', textAlign: 'center', fontSize: 12, color: '#64748b', fontWeight: 600, borderTop: '1px solid #0f2744' }}>
+              View all →
+            </div>
+          </Link>
+        )}
       </div>
     </div>
   );

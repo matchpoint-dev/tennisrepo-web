@@ -5,6 +5,8 @@ import { Inter } from 'next/font/google'
 import RankingCard from './RankingCard'
 import SearchBar from './SearchBar'
 import { getFlagUrl } from './lib/countryUtils'
+import { CALENDAR } from './lib/calendarData'
+import type { TournamentEntry } from './lib/calendarData'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,6 +22,88 @@ const LEVEL_COLORS: Record<string, string> = {
   '500': '#4b5563', '250': '#9ca3af', A: '#9ca3af',
   D: '#7c3aed', DC: '#7c3aed', E: '#06b6d4', NG: '#06b6d4',
   Olympics: '#0284c7', O: '#0284c7', C: '#64748b',
+}
+
+// ─── Calendar widget helpers ───────────────────────────────────────────────────
+const CAL_LEVEL: Record<string, { label: string; color: string }> = {
+  'Grand Slam':       { label: 'Grand Slam',   color: '#f0c619' },
+  'ATP Masters 1000': { label: 'Masters 1000', color: '#60a5fa' },
+  'ATP 500':          { label: 'ATP 500',       color: '#4b5563' },
+  'ATP 250':          { label: 'ATP 250',       color: '#94a3b8' },
+  'Team Event':       { label: 'Team Event',    color: '#f97316' },
+  'Year-End Finals':  { label: 'ATP Finals',    color: '#a855f7' },
+}
+
+const CAL_SURFACE: Record<string, { label: string; color: string; bg: string }> = {
+  'Hard (outdoor)': { label: 'Hard',     color: '#3b82f6', bg: 'rgba(59,130,246,0.12)'  },
+  'Hard (indoor)':  { label: 'Hard (i)', color: '#60a5fa', bg: 'rgba(96,165,250,0.10)'  },
+  'Clay':           { label: 'Clay',     color: '#c2521a', bg: 'rgba(194,82,26,0.12)'   },
+  'Grass':          { label: 'Grass',    color: '#22c55e', bg: 'rgba(34,197,94,0.12)'   },
+}
+
+const MONTH_MAP: Record<string, number> = {
+  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+}
+
+function parseTournamentDates(dates: string): { start: Date; end: Date } {
+  const YEAR = 2026
+  const [startRaw, endRaw] = dates.split('\u2013') // en-dash
+  const startTokens = startRaw.trim().split(' ')
+  const startMonth = MONTH_MAP[startTokens[0]]
+  const startDay = parseInt(startTokens[1])
+
+  const endTokens = endRaw.trim().split(' ')
+  let endMonth: number, endDay: number
+  if (endTokens.length === 2) {
+    endMonth = MONTH_MAP[endTokens[0]]
+    endDay = parseInt(endTokens[1])
+  } else {
+    endMonth = startMonth
+    endDay = parseInt(endTokens[0])
+  }
+
+  return {
+    start: new Date(YEAR, startMonth, startDay),
+    end:   new Date(endMonth < startMonth ? YEAR + 1 : YEAR, endMonth, endDay),
+  }
+}
+
+interface ActiveTournament extends TournamentEntry {
+  status: 'live' | 'upcoming'
+  start: Date
+  end: Date
+}
+
+function getActiveAndUpcoming(): ActiveTournament[] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const live: ActiveTournament[] = []
+  const upcoming: ActiveTournament[] = []
+
+  for (const section of CALENDAR) {
+    for (const t of section.tournaments) {
+      const { start, end } = parseTournamentDates(t.dates)
+      if (start <= today && today <= end) {
+        live.push({ ...t, status: 'live', start, end })
+      } else if (start > today) {
+        upcoming.push({ ...t, status: 'upcoming', start, end })
+      }
+    }
+  }
+
+  upcoming.sort((a, b) => a.start.getTime() - b.start.getTime())
+
+  // Show all live + upcoming within 21 days; if none in 21 days, show next wave
+  const cutoff = new Date(today)
+  cutoff.setDate(today.getDate() + 21)
+  const soon = upcoming.filter(t => t.start <= cutoff)
+  const upcomingToShow = soon.length > 0
+    ? soon
+    : upcoming.slice(0, upcoming.findIndex((t, i, arr) => i > 0 && t.start > arr[0].start) + 1 || 4)
+
+  return [...live, ...upcomingToShow]
 }
 
 async function getLatestRankingDate(): Promise<string | null> {
@@ -150,7 +234,7 @@ export default async function Home() {
       <div style={{ backgroundColor: '#0d1f3c', padding: '48px 24px', textAlign: 'center', borderBottom: '1px solid #1e3a5f' }}>
         <h2 style={{ fontSize: 36, fontWeight: 800, marginBottom: 8 }}>ATP Tennis Statistics</h2>
         <p style={{ color: '#94a3b8', marginBottom: 28, fontSize: 16 }}>
-          Historical match data · ELO ratings · Head to head records · Entry lists
+          Historical match data · ELO ratings · Head to head records
         </p>
         <SearchBar />
       </div>
@@ -221,6 +305,82 @@ export default async function Home() {
             })}
           </div>
 
+          {/* Current & Upcoming Tournaments */}
+          {(() => {
+            const active = getActiveAndUpcoming()
+            if (!active.length) return null
+            return (
+              <div style={{ marginTop: 32 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: 1 }}>
+                    Current &amp; Upcoming
+                  </h3>
+                  <Link href="/calendar" style={{
+                    fontSize: 12, fontWeight: 600, color: '#60a5fa',
+                    textDecoration: 'none', border: '1px solid #60a5fa40',
+                    borderRadius: 6, padding: '4px 12px',
+                    backgroundColor: '#001a33',
+                  }}>
+                    Full Calendar →
+                  </Link>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  {active.map((t) => {
+                    const lvl = CAL_LEVEL[t.level] ?? { label: t.level, color: '#94a3b8' }
+                    const srf = CAL_SURFACE[t.surface] ?? { label: t.surface, color: '#94a3b8', bg: 'transparent' }
+                    const isLive = t.status === 'live'
+                    return (
+                      <div key={t.name + t.dates} style={{
+                        backgroundColor: '#0d1f3c',
+                        borderRadius: 10,
+                        padding: 16,
+                        border: isLive ? '1px solid #22c55e30' : '1px solid #1e3a5f',
+                        boxSizing: 'border-box',
+                      }}>
+                        {/* Status row */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          {isLive ? (
+                            <span style={{
+                              fontSize: 10, fontWeight: 800, color: '#22c55e',
+                              backgroundColor: '#22c55e18', border: '1px solid #22c55e40',
+                              borderRadius: 4, padding: '2px 7px', textTransform: 'uppercase', letterSpacing: 0.6,
+                            }}>
+                              ● Now
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 11, color: '#64748b' }}>
+                              {t.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </span>
+                          )}
+                          <span style={{ fontSize: 11, color: '#475569' }}>{t.dates}</span>
+                        </div>
+                        {/* Name */}
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0', marginBottom: 4 }}>{t.name}</div>
+                        {/* Location */}
+                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>{t.location}</div>
+                        {/* Badges */}
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+                            backgroundColor: lvl.color + '20', color: lvl.color,
+                            border: '1px solid ' + lvl.color + '40',
+                            textTransform: 'uppercase', letterSpacing: 0.4,
+                          }}>{lvl.label}</span>
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+                            backgroundColor: srf.bg, color: srf.color,
+                            border: '1px solid ' + srf.color + '40',
+                            textTransform: 'uppercase', letterSpacing: 0.4,
+                          }}>{srf.label}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
         </div>
 
         {/* Right sidebar — ATP Rankings + ELO Rankings */}
@@ -238,10 +398,26 @@ export default async function Home() {
             rows={eloRankings}
             valueKey="rating"
             accentColor="#60a5fa"
+            showViewAll={false}
           />
         </div>
 
       </div>
+
+      {/* Footer */}
+      <footer style={{ borderTop: '1px solid #1e3a5f', marginTop: 'auto', padding: '24px', textAlign: 'center', color: '#475569', fontSize: 13 }}>
+        <p style={{ margin: 0 }}>
+          Data sourced from{' '}
+          <a href="https://github.com/JeffSackmann/tennis_atp" target="_blank" rel="noopener noreferrer" style={{ color: '#94a3b8', textDecoration: 'none', borderBottom: '1px solid #334155' }}>
+            Jeff Sackmann&apos;s tennis_atp
+          </a>{' '}
+          and{' '}
+          <a href="https://www.ultimatetennisstatistics.com" target="_blank" rel="noopener noreferrer" style={{ color: '#94a3b8', textDecoration: 'none', borderBottom: '1px solid #334155' }}>
+            Mileta Čeković&apos;s Ultimate Tennis Statistics
+          </a>.
+          {' '}Built for educational and statistical purposes only.
+        </p>
+      </footer>
     </main>
   )
 }

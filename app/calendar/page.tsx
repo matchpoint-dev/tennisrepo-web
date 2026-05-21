@@ -57,6 +57,7 @@ const CALENDAR: MonthSection[] = [
       { dates: 'Feb 9–15',    name: 'Dallas Open',                              location: 'Dallas, United States',      level: 'ATP 500',          surface: 'Hard (indoor)',  dbSearch: 'Dallas' },
       { dates: 'Feb 9–15',    name: 'ABN AMRO Open',                            location: 'Rotterdam, Netherlands',     level: 'ATP 500',          surface: 'Hard (indoor)',  dbSearch: 'Rotterdam' },
       { dates: 'Feb 9–15',    name: 'IEB+ Argentina Open',                      location: 'Buenos Aires, Argentina',    level: 'ATP 250',          surface: 'Clay',           dbSearch: 'Buenos Aires' },
+      { dates: 'Feb 16–22',   name: 'Open 13 Provence',                         location: 'Marseille, France',          level: 'ATP 250',          surface: 'Hard (indoor)',  dbSearch: 'Marseille' },
       { dates: 'Feb 16–22',   name: 'Qatar Open',                               location: 'Doha, Qatar',                level: 'ATP 500',          surface: 'Hard (outdoor)', dbSearch: 'Doha' },
       { dates: 'Feb 16–22',   name: 'Rio Open',                                 location: 'Rio de Janeiro, Brazil',     level: 'ATP 500',          surface: 'Clay',           dbSearch: 'Rio' },
       { dates: 'Feb 16–22',   name: 'Delray Beach Open',                        location: 'Delray Beach, United States',level: 'ATP 250',          surface: 'Hard (outdoor)', dbSearch: 'Delray Beach' },
