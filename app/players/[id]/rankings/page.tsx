@@ -75,15 +75,28 @@ export default function RankingHistoryPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: p }, { data: rk }] = await Promise.all([
-        supabase.from('players').select('id, full_name, country_code').eq('id', id).single(),
-        supabase.from('rankings')
+      const { data: p } = await supabase
+        .from('players').select('id, full_name, country_code').eq('id', id).single();
+      setPlayer(p);
+
+      // Paginate rankings — Supabase default limit is 1000 rows, which cuts off
+      // players with long careers (e.g. Federer has ~1200+ weekly entries).
+      const PAGE = 1000;
+      let all: any[] = [];
+      let from = 0;
+      while (true) {
+        const { data: chunk } = await supabase
+          .from('rankings')
           .select('rank, ranking_date, points')
           .eq('player_id', id)
-          .order('ranking_date', { ascending: true }),
-      ]);
-      setPlayer(p);
-      setRawRankings(rk ?? []);
+          .order('ranking_date', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (!chunk || chunk.length === 0) break;
+        all = all.concat(chunk);
+        if (chunk.length < PAGE) break;
+        from += PAGE;
+      }
+      setRawRankings(all);
       setLoading(false);
     }
     load();
